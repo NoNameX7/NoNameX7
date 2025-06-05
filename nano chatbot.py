@@ -1,26 +1,35 @@
-from transformers import pipeline, set_seed
-
-# Inisialisasi model AI (gunakan model kecil untuk hemat RAM)
-chatbot = pipeline('text-generation', model='gpt2-small')  # Ganti 'gpt2-small' jika model tidak tersedia
-
-def main():
-    set_seed(42)
-    print("\nAI Chatbot (Tekan Ctrl+C untuk keluar)")
-    while True:
-        user_input = input("Anda: ")
-        if user_input.lower() in ["keluar", "exit"]:
-            break
+@bot.message_handler(commands=['transfer'])
+def transfer(message):
+    try:
+        # Format: /transfer [user_id] [jumlah]
+        args = message.text.split()
+        recipient_id = int(args[1])
+        amount = int(args[2])
+        sender_id = message.from_user.id
         
-        # Generate respons AI
-        response = chatbot(
-            user_input,
-            max_length=50,
-            num_return_sequences=1,
-            temperature=0.7,
-            pad_token_id=50256
-        )
+        if amount <= 0:
+            bot.reply_to(message, "❌ Jumlah harus positif")
+            return
         
-        print(f"AI: {response[0]['generated_text']}\n")
-
-if __name__ == "__main__":
-    main()
+        # Cek saldo pengirim
+        c.execute("SELECT coins FROM users WHERE user_id=?", (sender_id,))
+        sender_coins = c.fetchone()[0]
+        
+        if sender_coins < amount:
+            bot.reply_to(message, "❌ Saldo tidak cukup")
+            return
+        
+        # Kurangi saldo pengirim
+        c.execute("UPDATE users SET coins=coins-? WHERE user_id=?", 
+                  (amount, sender_id))
+                  
+        # Tambah saldo penerima
+        c.execute("INSERT OR IGNORE INTO users (user_id, coins) VALUES (?, 0)", (recipient_id,))
+        c.execute("UPDATE users SET coins=coins+? WHERE user_id=?", 
+                  (amount, recipient_id))
+                  
+        conn.commit()
+        bot.reply_to(message, f"✅ Berhasil transfer {amount} koin ke user {recipient_id}")
+        
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error: {str(e)}")
