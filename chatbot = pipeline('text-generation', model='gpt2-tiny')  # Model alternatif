@@ -1,0 +1,14 @@
+import openai
+
+openai.api_key = "API_KEY_ANDA"  # Dapatkan dari platform.openai.com
+
+def get_ai_response(prompt):
+    response = openai.Completion.create(
+        engine="gpt-3.5-turbo-instruct",
+        prompt=prompt,
+        max_tokens=100
+    )
+    return response.choices[0].text.strip()
+
+# Ganti bagian response di script utama dengan:
+# print(f"AI: {get_ai_response(user_input)}")
