@@ -1,0 +1,13 @@
+import requests
+
+API_URL = "https://api-inference.huggingface.co/models/distilgpt2"
+headers = {"Authorization": "Bearer YOUR_TOKEN"}
+
+def query(payload):
+    response = requests.post(API_URL, headers=headers, json=payload)
+    return response.json()
+
+output = query({
+    "inputs": "Anda: Apa kabar?\nAI:",
+    "parameters": {"max_length": 100}
+})
