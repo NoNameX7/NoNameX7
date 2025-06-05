@@ -6,14 +6,12 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv()
-TOKEN = os.getenv("TOKEN")
-bot = telebot.TeleBot(TOKEN)
+TOKEN = os.getenv("8114708818:AAFtjq_b99b-GbF9qzxptDhU5pHZsLa1R3U")
+bot = @GreenleafAI_Bot(8114708818:AAFtjq_b99b-GbF9qzxptDhU5pHZsLa1R3U)
 
-# Buat koneksi database
-conn = sqlite3.connect('mining.db', check_same_thread=False)
+conn = sqlite3.connect('mining.db', check_same_thread=True)
 c = conn.cursor()
 
-# Buat tabel jika belum ada
 c.execute('''CREATE TABLE IF NOT EXISTS users
              (user_id INTEGER PRIMARY KEY, coins INTEGER, last_mine_time REAL)''')
 conn.commit()
@@ -24,9 +22,7 @@ def start(message):
     c.execute("INSERT OR IGNORE INTO users (user_id, coins, last_mine_time) VALUES (?, 0, 0)", (user_id,))
     conn.commit()
     bot.reply_to(message, "🔷 **Bot Mining Koin** 🔷\n\n"
-                          "Gunakan perintah /mine setiap 1 jam untuk mining koin!\n"
-                          "Cek koinmu: /mycoin")
-
+                       
 @bot.message_handler(commands=['mine'])
 def mine(message):
     user_id = message.from_user.id
