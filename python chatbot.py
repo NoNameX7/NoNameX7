@@ -1,3 +1,4 @@
+
 @bot.message_handler(commands=['top10'])
 def top10(message):
     c.execute("SELECT user_id, coins FROM users ORDER BY coins DESC LIMIT 10")
