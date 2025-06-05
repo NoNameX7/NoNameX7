@@ -1,100 +1,247 @@
-def print_colored(text, color):
-    colors = {
-        "red": "\033[91m",
-        "green": "\033[92m",
-        "yellow": "\033[93m",
-        "blue": "\033[94m",
-        "reset": "\033[0m"
-    }
-    print(f"{colors[color]}{text}{colors['reset']}")
+pip install pyTelegramBotAPI python-dotenv requests
+python bot_mining.py
 
-# Di dalam loop utama:
-print_colored("AI: " + response[0]['generated_text'], "green")
+# Buat file backup.sh
+echo '#!/bin/bash
+cp mining.db /sdcard/backup_mining_$(date +%Y%m%d).db
+' > backup.sh
 
-prompt = f"You: {user_input}\nAI:"
-response = chatbot(
-    prompt,
-    max_length=100,
-    num_return_sequences=1,
-    temperature=0.7,
-    pad_token_id=tokenizer.eos_token_id
-)
+# Jadwalkan dengan cron
+crontab -e
+# Tambahkan baris:
+0 3 * * * /data/data/com.termux/files/home/backup.sh
 
-# Ambil hanya teks setelah prompt
-ai_text = response[0]['generated_text'][len(prompt):].strip()
 
-from transformers import pipeline, GPT2Tokenizer, GPT2LMHeadModel
-import os
 
-model_path = "./distilgpt2-local"
 
-# Cek dan unduh model jika belum ada
-if not os.path.exists(model_path):
-    os.makedirs(model_path)
-    print("Mengunduh model...")
-    tokenizer = GPT2Tokenizer.from_pretrained('distilgpt2')
-    model = GPT2LMHeadModel.from_pretrained('distilgpt2')
-    tokenizer.save_pretrained(model_path)
-    model.save_pretrained(model_path)
-else:
-    tokenizer = GPT2Tokenizer.from_pretrained(model_path)
-    model = GPT2LMHeadModel.from_pretrained(model_path)
 
-chatbot = pipeline('text-generation', model=model, tokenizer=tokenizer)
 
-def print_colored(text, color):
-    colors = {
-        "red": "\033[91m",
-        "green": "\033[92m",
-        "yellow": "\033[93m",
-        "blue": "\033[94m",
-        "reset": "\033[0m"
-    }
-    print(f"{colors[color]}{text}{colors['reset']}")
 
-def main():
-    history = []
-    print("Chatbot AI (ketik 'keluar' untuk berhenti)")
-    while True:
-        user_input = input("Anda: ")
-        if user_input.lower() in ["keluar", "exit"]:
-            with open("chat_history.txt", "w", encoding="utf-8") as f:
-                for msg in history:
-                    f.write(f"Anda: {msg[0]}\nAI: {msg[1]}\n\n")
-            break
+# Tambahkan kolom baru di database
+c.execute('''ALTER TABLE users
+             ADD COLUMN xp INTEGER DEFAULT 0,
+             ADD COLUMN level INTEGER DEFAULT 1''')
+conn.commit()
 
-        prompt = f"Anda: {user_input}\nAI:"
-        response = chatbot(
-            prompt,
-            max_length=100,
-            num_return_sequences=1,
-            temperature=0.7,
-            pad_token_id=tokenizer.eos_token_id
-        )
-        ai_text = response[0]['generated_text'][len(prompt):].strip()
+@bot.message_handler(commands=['mine'])
+def mine(message):
+    # ... (kode sebelumnya)
+    # Tambahkan XP setiap mining
+    xp_earned = random.randint(5, 15)
+    c.execute("UPDATE users SET xp = xp + ? WHERE user_id=?", (xp_earned, user_id))
+    
+    # Cek level up
+    c.execute("SELECT xp, level FROM users WHERE user_id=?", (user_id,))
+    current_xp, current_level = c.fetchone()
+    xp_required = current_level * 100
+    
+    if current_xp >= xp_required:
+        new_level = current_level + 1
+        c.execute("UPDATE users SET level = ?, xp = 0 WHERE user_id=?", 
+                 (new_level, user_id))
+        bot.send_message(message.chat.id, f"🎉 LEVEL UP! Sekarang level {new_level}!")
+    
+    conn.commit()
+
+
+
+
+
+# Buat tabel items
+c.execute('''CREATE TABLE IF NOT EXISTS shop
+             (item_id INTEGER PRIMARY KEY,
+              name TEXT,
+              price INTEGER,
+              description TEXT)''')
+
+# Tambahkan beberapa item default
+items = [
+    (1, "🛡️ Perisai", 50, "Perlindungan tambahan"),
+    (2, "⚔️ Pedang", 100, "Meningkatkan hasil mining"),
+    (3, "💎 Paket VIP", 500, "Bonus harian 2x lipat")
+]
+c.executemany("INSERT OR IGNORE INTO shop VALUES (?,?,?,?)", items)
+conn.commit()
+
+@bot.message_handler(commands=['shop'])
+def show_shop(message):
+    c.execute("SELECT * FROM shop")
+    items = c.fetchall()
+    
+    shop_msg = "🛒 TOKO ITEM\n\n"
+    for item in items:
+        shop_msg += f"{item[0]}. {item[1]} - {item[2]} koin\n   {item[3]}\n\n"
+    
+    shop_msg += "Beli item dengan: /buy [id_item]"
+    bot.reply_to(message, shop_msg)
+
+@bot.message_handler(commands=['buy'])
+def buy_item(message):
+    try:
+        item_id = int(message.text.split()[1])
+        user_id = message.from_user.id
         
-        # Jika AI menghasilkan teks kosong, beri respons default
-        if not ai_text:
-            ai_text = "Maaf, saya tidak mengerti."
+        # Dapatkan info item
+        c.execute("SELECT price FROM shop WHERE item_id=?", (item_id,))
+        item_price = c.fetchone()
+        if not item_price:
+            bot.reply_to(message, "❌ Item tidak ditemukan")
+            return
+            
+        # Cek saldo user
+        c.execute("SELECT coins FROM users WHERE user_id=?", (user_id,))
+        user_coins = c.fetchone()[0]
         
-        history.append((user_input, ai_text))
-        print_colored(f"AI: {ai_text}", "green")
+        if user_coins < item_price[0]:
+            bot.reply_to(message, "❌ Saldo tidak cukup")
+            return
+            
+        # Kurangi saldo dan tambahkan item ke inventory
+        c.execute("UPDATE users SET coins = coins - ? WHERE user_id=?", 
+                 (item_price[0], user_id))
+        c.execute('''INSERT OR IGNORE INTO inventory 
+                    (user_id, item_id) VALUES (?, ?)''', 
+                 (user_id, item_id))
+        conn.commit()
+        
+        bot.reply_to(message, "✅ Pembelian berhasil! Gunakan /inventory untuk melihat itemmu")
+        
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error: {str(e)}")
 
-if __name__ == "__main__":
-    main()
 
 
-4
-import requests
 
-API_URL = "https://api-inference.huggingface.co/models/distilgpt2"
-headers = {"Authorization": "Bearer YOUR_TOKEN"}
+# Buat tabel inventory
+c.execute('''CREATE TABLE IF NOT EXISTS inventory
+             (user_id INTEGER,
+              item_id INTEGER,
+              FOREIGN KEY(user_id) REFERENCES users(user_id),
+              FOREIGN KEY(item_id) REFERENCES shop(item_id))''')
 
-def query(payload):
-    response = requests.post(API_URL, headers=headers, json=payload)
-    return response.json()
+@bot.message_handler(commands=['inventory'])
+def show_inventory(message):
+    user_id = message.from_user.id
+    c.execute('''SELECT s.item_id, s.name 
+                 FROM inventory i
+                 JOIN shop s ON i.item_id = s.item_id
+                 WHERE i.user_id=?''', (user_id,))
+    items = c.fetchall()
+    
+    if not items:
+        bot.reply_to(message, "📦 Inventory kosong")
+        return
+        
+    inv_msg = "📦 INVENTORY KAMU:\n\n"
+    for item in items:
+        inv_msg += f"- {item[1]}\n"
+    
+    bot.reply_to(message, inv_msg)
 
-output = query({
-    "inputs": "Anda: Apa kabar?\nAI:",
-    "parameters": {"max_length": 100}
-})
+# Modifikasi fungsi mine untuk efek item
+@bot.message_handler(commands=['mine'])
+def mine(message):
+    # ... (kode sebelumnya)
+    
+    # Cek efek item pedang (ID 2)
+    c.execute('''SELECT COUNT(*) FROM inventory 
+                 WHERE user_id=? AND item_id=2''', (user_id,))
+    has_sword = c.fetchone()[0] > 0
+    
+    if has_sword:
+        coins_earned *= 2  # 2x lipat koin
+        bonus_msg = "\n⚔️ Bonus Pedang: 2x koin!"
+    else:
+        bonus_msg = ""
+    
+    # ... (lanjutan proses mining)
+    bot.reply_to(message, f"⛏️ Kamu mendapat {coins_earned} koin!{bonus_msg}\n💰 Total: {new_balance}")
+
+
+
+# Buat tabel achievements
+c.execute('''CREATE TABLE IF NOT EXISTS achievements
+             (user_id INTEGER,
+              badge TEXT,
+              progress INTEGER DEFAULT 0)''')
+
+# Modifikasi fungsi mine
+def mine(message):
+    # ... (kode sebelumnya)
+    
+    # Update achievement "Penambang Aktif"
+    update_achievement(user_id, "miner", 1)
+    
+    # ... (lanjutan kode)
+
+def update_achievement(user_id, badge_type, increment=1):
+    # Cek progress saat ini
+    c.execute('''SELECT progress FROM achievements 
+                 WHERE user_id=? AND badge=?''', 
+              (user_id, badge_type))
+    current = c.fetchone()
+    
+    if not current:
+        c.execute('''INSERT INTO achievements 
+                     (user_id, badge, progress) VALUES (?,?,?)''',
+                  (user_id, badge_type, increment))
+    else:
+        new_progress = current[0] + increment
+        c.execute('''UPDATE achievements SET progress=? 
+                     WHERE user_id=? AND badge=?''',
+                  (new_progress, user_id, badge_type))
+    
+    # Cek jika achievement tercapai
+    thresholds = {
+        "miner": [10, 50, 100],
+        "rich": [100, 500, 1000]
+    }
+    
+    for threshold in thresholds.get(badge_type, []):
+        if new_progress == threshold:
+            badge_name = f"{badge_type}_{threshold}"
+            award_badge(user_id, badge_name)
+
+def award_badge(user_id, badge_name):
+    badges = {
+        "miner_10": "🥉 Penambang Pemula",
+        "miner_50": "🥈 Penambang Ahli",
+        "miner_100": "🥇 Penambang Legenda",
+        "rich_100": "💼 Pengusaha Kecil",
+        "rich_500": "🏦 Juragan Koin"
+    }
+    
+    badge_title = badges.get(badge_name, "Prestasi Baru")
+    bot.send_message(user_id, f"🏆 SELAMAT! Kamu dapat badge: {badge_title}")
+
+
+
+
+from collections import defaultdict
+leaderboard_cache = defaultdict(dict)
+last_cache_update = 0
+
+@bot.message_handler(commands=['top'])
+def leaderboard(message):
+    global last_cache_update
+    # Update cache setiap 5 menit
+    if time.time() - last_cache_update > 300:
+        c.execute("SELECT user_id, coins FROM users ORDER BY coins DESC LIMIT 10")
+        for i, row in enumerate(c.fetchall()):
+            leaderboard_cache[i] = row
+        last_cache_update = time.time()
+    
+    # Gunakan data dari cache
+    response = "🏆 TOP 10 MINERS (Cached) 🏆\n\n"
+    for rank, data in leaderboard_cache.items():
+        response += f"{rank+1}. User {data[0]}: {data[1]} koin\n"
+    bot.reply_to(message, response)
+
+
+
+
+
+# Di awal script
+import resource
+resource.setrlimit(resource.RLIMIT_AS, (200 * 1024 * 1024, 200 * 1024 * 1024))  # Batas 200MB
+
