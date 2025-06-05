@@ -1,14 +1,86 @@
+#!/data/data/com.termux/files/usr/bin/sh
+termux-wake-lock
+cd ~/bot-mining
+python bot_mining.py
 
-import requests
+@bot.message_handler(commands=['shop'])
+def shop(message):
+    shop_items = "🛒 TOKO KOIN:\n\n"
+    shop_items += "1. Stiker Premium - 50 koin\n"
+    shop_items += "2. Voucher Pulsa - 100 koin\n"
+    bot.reply_to(message, shop_items)
 
-API_URL = "https://api-inference.huggingface.co/models/distilgpt2"
-headers = {"Authorization": "Bearer YOUR_TOKEN"}
+# Tambah kolom 'xp' di database
+xp_earned = random.randint(5, 15)
+level_up = (current_xp + xp_earned) // 100
 
-def query(payload):
-    response = requests.post(API_URL, headers=headers, json=payload)
-    return response.json()
+chmod +x ~/.termux/boot/start-bot
 
-output = query({
-    "inputs": "Anda: Apa kabar?\nAI:",
-    "parameters": {"max_length": 100}
-})
+# Tambah kolom 'gold_coins' di database
+if random.random() < 0.1:  # 10% chance dapat gold
+    gold_earned = 1
+
+# Di Termux
+cp mining.db /sdcard/backup_mining.db
+
+# Restore database
+cp /sdcard/backup_mining.db mining.db
+
+@bot.message_handler(commands=['mine'])
+def mine(message):
+    user_id = message.from_user.id
+    # ... (bagian cek database sama seperti sebelumnya)
+
+    if last_mine and (current_time - last_mine) < 3600:
+        remaining = 3600 - (current_time - last_mine)
+        hours = int(remaining // 3600)
+        minutes = int((remaining % 3600) // 60)
+        seconds = int(remaining % 60)
+        bot.reply_to(message, f"⏳ Tunggu {hours} jam {minutes} menit {seconds} detik lagi!")
+        return
+
+    # ... (lanjutan mining)
+
+@bot.message_handler(commands=['start'])
+def start(message):
+    user_id = message.from_user.id
+    # Cek apakah ada referral code
+    args = message.text.split()
+    if len(args) > 1 and args[1].isdigit():
+        referrer_id = int(args[1])
+        # Beri bonus ke referrer
+        c.execute("UPDATE users SET coins=coins+10 WHERE user_id=?", (referrer_id,))
+        conn.commit()
+        bot.reply_to(message, "🎉 Kamu bergabung melalui referral! Pengundangmu dapat 10 koin.")
+
+    # ... (lanjutkan pendaftaran user baru)
+
+@bot.message_handler(commands=['ref'])
+def referral_link(message):
+    user_id = message.from_user.id
+    bot.reply_to(message, f"🔗 Ajak temanmu dengan link ini:\n"
+                          f"https://t.me/{bot.get_me().username}?start={user_id}\n"
+                          "Dapatkan 10 koin per referral!")
+
+import logging
+
+logging.basicConfig(
+    filename='mining_bot.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+# Di setiap handler, tambahkan log
+@bot.message_handler(commands=['mine'])
+def mine(message):
+    user_id = message.from_user.id
+    logging.info(f"User {user_id} melakukan mining")
+    # ...
+
+while True:
+    try:
+        bot.polling(none_stop=True, interval=0)
+    except Exception as e:
+        logging.error(f"Error: {e}")
+        time.sleep(15)  # Tunggu 15 detik sebelum restart
+
