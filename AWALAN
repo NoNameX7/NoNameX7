@@ -1,0 +1,6 @@
+pkg update && pkg upgrade
+pkg install python
+python --version
+pkg install git
+pip install python-telegram-bot
+nano bot_mining.py
