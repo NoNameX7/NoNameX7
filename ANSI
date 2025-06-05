@@ -10,3 +10,91 @@ def print_colored(text, color):
 
 # Di dalam loop utama:
 print_colored("AI: " + response[0]['generated_text'], "green")
+
+prompt = f"You: {user_input}\nAI:"
+response = chatbot(
+    prompt,
+    max_length=100,
+    num_return_sequences=1,
+    temperature=0.7,
+    pad_token_id=tokenizer.eos_token_id
+)
+
+# Ambil hanya teks setelah prompt
+ai_text = response[0]['generated_text'][len(prompt):].strip()
+
+from transformers import pipeline, GPT2Tokenizer, GPT2LMHeadModel
+import os
+
+model_path = "./distilgpt2-local"
+
+# Cek dan unduh model jika belum ada
+if not os.path.exists(model_path):
+    os.makedirs(model_path)
+    print("Mengunduh model...")
+    tokenizer = GPT2Tokenizer.from_pretrained('distilgpt2')
+    model = GPT2LMHeadModel.from_pretrained('distilgpt2')
+    tokenizer.save_pretrained(model_path)
+    model.save_pretrained(model_path)
+else:
+    tokenizer = GPT2Tokenizer.from_pretrained(model_path)
+    model = GPT2LMHeadModel.from_pretrained(model_path)
+
+chatbot = pipeline('text-generation', model=model, tokenizer=tokenizer)
+
+def print_colored(text, color):
+    colors = {
+        "red": "\033[91m",
+        "green": "\033[92m",
+        "yellow": "\033[93m",
+        "blue": "\033[94m",
+        "reset": "\033[0m"
+    }
+    print(f"{colors[color]}{text}{colors['reset']}")
+
+def main():
+    history = []
+    print("Chatbot AI (ketik 'keluar' untuk berhenti)")
+    while True:
+        user_input = input("Anda: ")
+        if user_input.lower() in ["keluar", "exit"]:
+            with open("chat_history.txt", "w", encoding="utf-8") as f:
+                for msg in history:
+                    f.write(f"Anda: {msg[0]}\nAI: {msg[1]}\n\n")
+            break
+
+        prompt = f"Anda: {user_input}\nAI:"
+        response = chatbot(
+            prompt,
+            max_length=100,
+            num_return_sequences=1,
+            temperature=0.7,
+            pad_token_id=tokenizer.eos_token_id
+        )
+        ai_text = response[0]['generated_text'][len(prompt):].strip()
+        
+        # Jika AI menghasilkan teks kosong, beri respons default
+        if not ai_text:
+            ai_text = "Maaf, saya tidak mengerti."
+        
+        history.append((user_input, ai_text))
+        print_colored(f"AI: {ai_text}", "green")
+
+if __name__ == "__main__":
+    main()
+
+
+4
+import requests
+
+API_URL = "https://api-inference.huggingface.co/models/distilgpt2"
+headers = {"Authorization": "Bearer YOUR_TOKEN"}
+
+def query(payload):
+    response = requests.post(API_URL, headers=headers, json=payload)
+    return response.json()
+
+output = query({
+    "inputs": "Anda: Apa kabar?\nAI:",
+    "parameters": {"max_length": 100}
+})
