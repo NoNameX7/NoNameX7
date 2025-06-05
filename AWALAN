@@ -12,4 +12,8 @@ python bot_mining.py
 pkg update && pkg upgrade
 pkg install python git
 pip install telebot python-dotenv requests
+echo "TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" > .env
+python bot_mining.py
+tmux new -s miningbot
+python bot_mining.py
 
