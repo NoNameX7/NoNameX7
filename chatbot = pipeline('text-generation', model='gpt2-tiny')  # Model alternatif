@@ -1,14 +1,67 @@
-import openai
+import telebot
+import time
+import random
+import sqlite3
+from dotenv import load_dotenv
+import os
 
-openai.api_key = "API_KEY_ANDA"  # Dapatkan dari platform.openai.com
+load_dotenv()
+TOKEN = os.getenv("TOKEN")
+bot = telebot.TeleBot(TOKEN)
 
-def get_ai_response(prompt):
-    response = openai.Completion.create(
-        engine="gpt-3.5-turbo-instruct",
-        prompt=prompt,
-        max_tokens=100
-    )
-    return response.choices[0].text.strip()
+# Buat koneksi database
+conn = sqlite3.connect('mining.db', check_same_thread=False)
+c = conn.cursor()
 
-# Ganti bagian response di script utama dengan:
-# print(f"AI: {get_ai_response(user_input)}")
+# Buat tabel jika belum ada
+c.execute('''CREATE TABLE IF NOT EXISTS users
+             (user_id INTEGER PRIMARY KEY, coins INTEGER, last_mine_time REAL)''')
+conn.commit()
+
+@bot.message_handler(commands=['start'])
+def start(message):
+    user_id = message.from_user.id
+    c.execute("INSERT OR IGNORE INTO users (user_id, coins, last_mine_time) VALUES (?, 0, 0)", (user_id,))
+    conn.commit()
+    bot.reply_to(message, "🔷 **Bot Mining Koin** 🔷\n\n"
+                          "Gunakan perintah /mine setiap 1 jam untuk mining koin!\n"
+                          "Cek koinmu: /mycoin")
+
+@bot.message_handler(commands=['mine'])
+def mine(message):
+    user_id = message.from_user.id
+    c.execute("SELECT coins, last_mine_time FROM users WHERE user_id=?", (user_id,))
+    row = c.fetchone()
+    
+    if not row:
+        bot.reply_to(message, "❌ Kamu belum memulai bot. Ketik /start dulu.")
+        return
+        
+    coins, last_mine = row
+    current_time = time.time()
+    
+    if current_time - last_mine < 3600:
+        bot.reply_to(message, f"⏳ Tunggu {int(3600 - (current_time - last_mine)) // 60} menit lagi!")
+        return
+        
+    coins_earned = random.randint(1, 5)
+    new_coins = coins + coins_earned
+    c.execute("UPDATE users SET coins=?, last_mine_time=? WHERE user_id=?", 
+              (new_coins, current_time, user_id))
+    conn.commit()
+    
+    bot.reply_to(message, f"⛏️ Kamu mendapat {coins_earned} koin!\n"
+                          f"💰 Total koin: {new_coins}")
+
+@bot.message_handler(commands=['mycoin'])
+def mycoin(message):
+    user_id = message.from_user.id
+    c.execute("SELECT coins FROM users WHERE user_id=?", (user_id,))
+    row = c.fetchone()
+    if row:
+        bot.reply_to(message, f"💰 Total koinmu: {row[0]}")
+    else:
+        bot.reply_to(message, "❌ Kamu belum memulai bot. Ketik /start dulu.")
+
+print("Bot berjalan...")
+bot.polling()
