@@ -1,5 +1,4 @@
-
-@bot.message_handler(commands=['top'])
+bot.message_handler(commands=['top'])
 def leaderboard(message):
     c.execute("SELECT user_id, coins FROM users ORDER BY coins DESC LIMIT 10")
     top_users = c.fetchall()
