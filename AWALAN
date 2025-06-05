@@ -4,3 +4,12 @@ python --version
 pkg install git
 pip install python-telegram-bot
 nano bot_mining.py
+python bot_mining.py
+pkg install tmux
+tmux new -s miningbot
+python bot_mining.py
+# Tekan Ctrl+B lalu D untuk keluar dari tmux (bot tetap berjalan)
+pkg update && pkg upgrade
+pkg install python git
+pip install telebot python-dotenv requests
+
