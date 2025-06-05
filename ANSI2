@@ -1,14 +1,44 @@
-
-import requests
-
-API_URL = "https://api-inference.huggingface.co/models/distilgpt2"
-headers = {"Authorization": "Bearer YOUR_TOKEN"}
-
-def query(payload):
-    response = requests.post(API_URL, headers=headers, json=payload)
-    return response.json()
-
-output = query({
-    "inputs": "Anda: Apa kabar?\nAI:",
-    "parameters": {"max_length": 100}
-})
+@bot.message_handler(commands=['transfer'])
+def transfer(message):
+    try:
+        # Format: /transfer [user_id] [jumlah]
+        args = message.text.split()[1:]
+        if len(args) < 2:
+            bot.reply_to(message, "❌ Format salah. Gunakan: /transfer [user_id] [jumlah]")
+            return
+            
+        recipient_id = int(args[0])
+        amount = int(args[1])
+        sender_id = message.from_user.id
+        
+        if amount <= 0:
+            bot.reply_to(message, "❌ Jumlah harus lebih dari 0.")
+            return
+            
+        # Cek koin pengirim
+        c.execute("SELECT coins FROM users WHERE user_id=?", (sender_id,))
+        sender_coins = c.fetchone()
+        if not sender_coins:
+            bot.reply_to(message, "❌ Kamu belum memulai bot. Ketik /start dulu.")
+            return
+            
+        if sender_coins[0] < amount:
+            bot.reply_to(message, "❌ Koin tidak mencukupi.")
+            return
+            
+        # Cek penerima
+        c.execute("SELECT coins FROM users WHERE user_id=?", (recipient_id,))
+        recipient_exists = c.fetchone()
+        if not recipient_exists:
+            bot.reply_to(message, "❌ Penerima tidak ditemukan.")
+            return
+            
+        # Kurangi koin pengirim, tambahkan ke penerima
+        c.execute("UPDATE users SET coins = coins - ? WHERE user_id=?", (amount, sender_id))
+        c.execute("UPDATE users SET coins = coins + ? WHERE user_id=?", (amount, recipient_id))
+        conn.commit()
+        
+        bot.reply_to(message, f"✅ Berhasil transfer {amount} koin ke user {recipient_id}!")
+        
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error: {str(e)}")
